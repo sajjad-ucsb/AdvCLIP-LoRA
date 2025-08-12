@@ -1,5 +1,6 @@
 # Few-Shot Adversarial Low-Rank Fine-Tuning of Vision-Language Models
 The official implementation of [*Few-Shot Adversarial Low-Rank Fine-Tuning of Vision-Language Models*](https://arxiv.org/pdf/2505.15130).
+![AdvCLIP-LoRA-pipeline](AdvCLIP-LoRA.png "AdvCLIP-LoRA-pipeline")
 ## How to Run
 
 You can run `main.py` with some specified arguments.
