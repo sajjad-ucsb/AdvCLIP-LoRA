@@ -13,11 +13,15 @@ Please follow the instructions at CoOP https://github.com/KaiyangZhou/CoOp/blob/
 
 `--backbone` name of the backbone model.
 
+`--epsilon_train` epsilon used for training.
+
+`--epsilon` epsilon used for PGD or FGSM attacks.
+
 You can optionally provide a save_path to save the LoRA modules, which can be reloaded easily with the --eval_only argument. 
 
 ### Running example
 
-Clean and Robust Few-shot: `bash scripts/few-shot-1.sh`
+Clean and Robust Few-shot: `bash scripts/few-shot.sh`
 
 
 ## Acknowledgement
