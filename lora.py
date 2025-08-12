@@ -35,22 +35,12 @@ def evaluate_lora(args, clip_model, loader, dataset, attack="True"):
         image_features = image_features / image_features.norm(dim=-1, keepdim=True)
         cosine_similarity = image_features @ text_features.t()
 
-        # if attack:
-        #     loss = F.cross_entropy(cosine_similarity, target)
-        #     grad = torch.autograd.grad(loss, images, retain_graph=True)[0]
-        #     images = fgsm_attack(images, 10/255, grad)
-        #     with torch.amp.autocast(device_type="cuda", dtype=torch.float16):
-        #         image_features = clip_model.encode_image(images)
-        #     image_features = image_features/image_features.norm(dim=-1, keepdim=True)
-        #     cosine_similarity = image_features @ text_features.t()
-        # attack
         ori = images.data.clone().detach()
         if attack:
             if args.attack_type == 'FGSM':
                 epsilon = args.epsilon
                 pgd_iters = 1
             else:
-                # epsilon = 2.5 * args.epsilon / args.iters
                 epsilon = args.epsilon
                 pgd_iters = args.iters
             for iter in range(pgd_iters):
@@ -106,20 +96,22 @@ def run_lora(args, clip_model, logit_scale, dataset, train_loader, val_loader, t
 
     if args.eval_only:
         load_lora(args, list_lora_layers)
-        # acc_test = evaluate_lora(args, clip_model, test_loader, dataset, attack=False)
-        # print("**** Final test accuracy: {:.2f}. ****\n".format(acc_test))
+        
+        if args.attack_type == 'PGD':
 
-        args.attack_type = 'PGD'
-        pgd = evaluate_lora(args, clip_model, test_loader, dataset, attack=True)
-        print("**** Final test accuracy PGD: {:.2f}. ****\n".format(pgd))
-
-        # args.attack_type = 'FGSM'
-        # args.epsilon = 10.0
-        # fgsm = evaluate_lora(args, clip_model, test_loader, dataset, attack=True)
-        # print("**** Final test accuracy FGSM: {:.2f}. ****\n".format(fgsm))
+            acc_test = evaluate_lora(args, clip_model, test_loader, dataset, attack=False)
+            print("**** Final test accuracy: {:.2f}. ****\n".format(acc_test))
+    
+            pgd = evaluate_lora(args, clip_model, test_loader, dataset, attack=True)
+            print("**** Final test accuracy PGD: {:.2f}. ****\n".format(pgd))
+    
+        elif args.attack_type == 'FGSM':
+            fgsm = evaluate_lora(args, clip_model, test_loader, dataset, attack=True)
+            print("**** Final test accuracy FGSM: {:.2f}. ****\n".format(fgsm))
+        
         return
 
-    mark_only_lora_as_trainable(clip_model)
+    mark_only_lora_as_trainable(clip_model, 'none')
     total_iters = args.n_iters * args.shots
 
     optimizer = torch.optim.AdamW(get_lora_parameters(clip_model), weight_decay=1e-2, betas=(0.9, 0.999), lr=args.lr)
@@ -156,6 +148,7 @@ def run_lora(args, clip_model, logit_scale, dataset, train_loader, val_loader, t
                 delta.requires_grad = True
 
             repeated = delta.unsqueeze(0).repeat(images.shape[0], 1, 1, 1)
+            cloned_images = images.clone()
             images = images + repeated
 
             if args.encoder == 'text' or args.encoder == 'both':
@@ -187,12 +180,12 @@ def run_lora(args, clip_model, logit_scale, dataset, train_loader, val_loader, t
                 step_size *= 0.05  # 0.05
                 delta = delta + step_size * delta_grad
                 delta = torch.clip(delta, -args.epsilon_train / 255, args.epsilon_train / 255)
-                delta = torch.clip(delta, torch.min(-images), torch.max(1 - images))
+                delta = torch.clip(delta, torch.min(-cloned_images), torch.max(1 - cloned_images))
 
                 delta = delta.clone().detach()
                 delta.requires_grad = True
                 repeated = delta.unsqueeze(0).repeat(images.shape[0], 1, 1, 1)
-                images = images + repeated
+                images = cloned_images + repeated
                 with torch.amp.autocast(device_type="cuda", dtype=torch.float16):
                     image_features = clip_model.encode_image(images)
                 cosine_similarity = logit_scale * image_features @ text_features.t()
